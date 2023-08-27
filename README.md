@@ -1,18 +1,23 @@
 # jag
-Just Another deep learninG framework
+Just Another deep learninG framework.
 
-# Yea?
-Ok, the G in the name also means graph. I want to write a custom deep learning framework with the computational graph 
-the first class citizen and everything else goes around that.
+# Huh?
+Ok, the G in the name also emphasizes the graphs. I want to write a custom deep learning framework with **the computational graphs** being
+the first class citizens. Everything else goes around that.
 
 Why:
 1. For my own learning
-2. PyTorch is something that pretends to be your friend and does all the magic behind. It puts tensors under the
-spotlight and does all the magics around that (allows eager, builds graphs on the fly, etc). JAX screams every time 
-you step a wrong foot, but saves your time in the long run. I would say that the functions and functional programming 
-is its design highlight. What if we make the computational graph the first class citizen in a deep learning framework? 
-Not saying I know but I just want to find out.
-3. I want to be able to port my model to any coding language. If I have a properly abstracted computational graph,
-I would just need to implement them and reconstruct it iteratively in the new language, isn't it?
+2. A computation graph is universal: it doesn't care about the deep learning framework as long as you implement each node operation.
+3. It should easily extend to generalized differential programming, such as semi-ring algebra like in [2307.03056](https://arxiv.org/pdf/2307.03056.pdf).
 
-# If you see this message, the repo isn't working yet. I have some thoughts and let's see if I can pull it through.
+Note that:
+- the consequence of 2 indicates a cross-framework interoperability of deep learning models:
+  imagine you have a model `M`, all you need to do is to 
+  1. Trace the computational graph `graph = trace(M)`.
+  2. JSON-ify the graph and save it `graph.save('graph.json')`. Each node in the dict represents a node in the graph.
+  3. In your favorite language (C, javascript, or whatever), you write some codes that:
+     1. reads json files;
+     2. implements the 5-10 basic matrix ops that show up in the JSON nodes.
+  4. Execute the graph like a champ (e.g., running LLaMA 2 on your favorite language)
+
+## The content of the repo is currently WIP...
