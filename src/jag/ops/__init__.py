@@ -1,9 +1,42 @@
-from ._ops import _traceable_op_registry, register_op, get_registered_op, TraceableOp, to_traceable
+from ._ops import (
+    _traceable_op_registry,
+    register_op,
+    get_op_registration,
+    squeeze,
+    unsqueeze,
+    repeat,
+    reshape,
+    transpose,
+    sum,
+    add,
+    subtract,
+    negative,
+    multiply,
+    divide,
+    matmul,
+    where,
+    power,
+)
+from ._operand import Operand
+from ._traceable_op import TraceableOp
 
-
-__all__ = ['register_op', 'get_registered_op', 'TraceableOp', 'to_traceable']
-
-# Expose registered ops as module level functions
-for name, val in _traceable_op_registry.items():
-    locals()[name] = val['op']
-    __all__.append(name)
+__all__ = [
+    "Operand",
+    "TraceableOp",
+    "register_op",
+    "get_op_registration",
+    "squeeze",
+    "unsqueeze",
+    "repeat",
+    "reshape",
+    "transpose",
+    "sum",
+    "add",
+    "subtract",
+    "negative",
+    "multiply",
+    "divide",
+    "matmul",
+    "where",
+    "power",
+]
