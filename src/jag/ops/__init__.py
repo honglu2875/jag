@@ -7,6 +7,8 @@ from ._ops import (
     repeat,
     reshape,
     transpose,
+    zeros_like,
+    ones_like,
     sum,
     add,
     subtract,
@@ -15,6 +17,7 @@ from ._ops import (
     divide,
     matmul,
     where,
+    log,
     power,
 )
 from ._operand import Operand
@@ -30,6 +33,8 @@ __all__ = [
     "repeat",
     "reshape",
     "transpose",
+    "zeros_like",
+    "ones_like",
     "sum",
     "add",
     "subtract",
@@ -38,5 +43,6 @@ __all__ = [
     "divide",
     "matmul",
     "where",
+    "log",
     "power",
 ]

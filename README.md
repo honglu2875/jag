@@ -14,7 +14,7 @@ the first class citizens. Everything else goes around that.
 Why:
 1. For my own learning
 2. A computation graph is universal: it doesn't care about the language as long as you implement each node operation.
-3. It should easily extend to generalized differential programming, such as semi-ring algebra like in [2307.03056](https://arxiv.org/pdf/2307.03056.pdf).
+3. It might easily extend to support generalized differentials, such as using different ring operations like [2307.03056](https://arxiv.org/pdf/2307.03056.pdf).
 
 More concretely, I want to write a framework where the following can be done:
 - Imagine you have a model `M`, to port it to a different programming language, all you need to do is to 
