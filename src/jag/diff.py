@@ -1,11 +1,13 @@
 from functools import singledispatch
 from typing import Tuple
 
-from jag.graph import Node, get_leaves, ConstantArray, TracedArray
+import numpy as np
+
+from jag.graph import ConstantArray, Node, TracedArray, get_leaves
 from jag.ops import get_op_registration
 from jag.type import ArrayLike
 from jag.utils import topsort
-import numpy as np
+
 
 def vjp(root: Node):
     sorted_nodes = topsort(
@@ -23,10 +25,13 @@ def vjp(root: Node):
                 if isinstance(node, ConstantArray):
                     node_values[id(node)] = node.value
                 else:
-                    assert isinstance(node, Node), f"Cannot propagate value for node {node}.\n" \
-                                                   f"Likely a TracedArray is not given a concrete value."
+                    assert isinstance(node, Node), (
+                        f"Cannot propagate value for node {node}.\n"
+                        f"Likely a TracedArray is not given a concrete value."
+                    )
                     node_values[id(node)] = node.op(
-                        *[node_values[id(child)] for child in node.operands], **node.kwargs
+                        *[node_values[id(child)] for child in node.operands],
+                        **node.kwargs,
                     )
 
     def backprop(g: ArrayLike, node_values: dict) -> dict:
@@ -46,7 +51,9 @@ def vjp(root: Node):
             )
             for child, value in zip(node.operands, node_output):
                 # In case of custom ring structure, one can change "+" into the corresponding op.
-                backprop_values[id(child)] = backprop_values.setdefault(id(child), 0) + value
+                backprop_values[id(child)] = (
+                    backprop_values.setdefault(id(child), 0) + value
+                )
 
         return backprop_values
 
@@ -68,7 +75,9 @@ def vjp(root: Node):
         if not args:
             return ValueError("No leaf values are provided.")
         if len(args) == 1 and isinstance(args[0], dict):
-            node_values = {id(l): args[0][l.name] if l.name else l.value for l in leaves}
+            node_values = {
+                id(l): args[0][l.name] if l.name else l.value for l in leaves
+            }
         elif len(args) == 1 and isinstance(args[0], tuple):
             node_values = {id(l): val for l, val in zip(leaves, args[0])}
         else:

@@ -39,6 +39,13 @@ def get_op_registration(name: str) -> dict:
 
 
 # ----------------------------------- Primitive op implementations ----------------------------------- #
+def _replace(x, y, idx):
+    """
+    Replace the elements in 'x' with the elements in 'y' at the given indices.
+    """
+    x = x.copy()
+    x[idx] = y
+    return x
 
 
 # Shape manipulations
@@ -49,6 +56,8 @@ reshape = TraceableOp(np.reshape, "reshape", non_diff_args=[(1, "newshape")])
 transpose = TraceableOp(np.transpose, "transpose")
 zeros_like = TraceableOp(np.zeros_like, "zeros_like")
 ones_like = TraceableOp(np.ones_like, "ones_like")
+at = TraceableOp(lambda x, idx: x[idx], "at", non_diff_args=[(1, "idx")])
+replace = TraceableOp(_replace, "replace", non_diff_args=[(2, "idx")])
 
 # Basic arithmetics
 sum = TraceableOp(np.sum, "sum")
@@ -64,6 +73,7 @@ where = TraceableOp(
     non_diff_args=[(2, "condition")],
 )
 log = TraceableOp(np.log, "log")
+exp = TraceableOp(np.exp, "exp")
 power = TraceableOp(np.power, "power")
 
 
@@ -124,7 +134,7 @@ def repeat_vjp(g, x, **kwargs):
     repeats = kwargs["repeats"]
     if isinstance(repeats, int):
         if axis is None:
-            return sum(reshape(g, (*x.shape, repeats)), axis=-1),
+            return (sum(reshape(g, (*x.shape, repeats)), axis=-1),)
         else:
             # [aabbccddee] gets reshaped into [aa,bb,cc,dd,ee] and the repeated dim is summed over.
             return (
@@ -249,6 +259,21 @@ register_op(
     vjp=lambda g, x, **kwargs: (zeros_like(x),),
     jvp=lambda g, x, **kwargs: zeros_like(x),
 )
+register_op(
+    "at",
+    at,
+    vjp=lambda g, x, **kwargs: (replace(zeros_like(x), g, idx=kwargs["idx"]),),
+    jvp=lambda g, x, **kwargs: at(g, kwargs["idx"]),
+)
+register_op(
+    "replace",
+    replace,
+    vjp=lambda g, x, y, **kwargs: (
+        replace(g, zeros_like(y), idx=kwargs["idx"]),
+        at(g, idx=kwargs["idx"]),
+    ),
+    jvp=lambda g, h, x, y, **kwargs: replace(g, h, idx=kwargs["idx"]),
+)
 
 register_op(
     "sum",
@@ -309,6 +334,12 @@ register_op(
     log,
     vjp=lambda g, x, **kwargs: (g / x,),
     jvp=lambda g, x, **kwargs: g / x,
+)
+register_op(
+    "exp",
+    exp,
+    vjp=lambda g, x, **kwargs: (g * exp(x),),
+    jvp=lambda g, x, **kwargs: g * exp(x),
 )
 register_op(
     "power",

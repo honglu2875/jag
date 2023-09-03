@@ -11,7 +11,9 @@ def topsort(node: Node):
     stack = []
 
     def _topsort(node: Operand, stack: List[Node], visited: Set):
-        if not isinstance(node, TracedArray):  # Not a leaf -> carry out recursion on the node
+        if not isinstance(
+            node, TracedArray
+        ):  # Not a leaf -> carry out recursion on the node
             assert isinstance(node, Node)
             for operand in node.operands:
                 if id(operand) not in visited:

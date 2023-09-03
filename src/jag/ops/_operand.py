@@ -3,7 +3,8 @@ from typing import Callable
 
 import numpy as np
 
-from ._ops import add, divide, matmul, multiply, negative, power, subtract, transpose
+from ._ops import (add, at, divide, matmul, multiply, negative, power,
+                   subtract, transpose)
 
 
 class Operand:
@@ -48,6 +49,9 @@ class Operand:
 
     def __pow__(self, p, modulo=None):
         return power(self, p)
+
+    def __getitem__(self, item):
+        return at(self, item)
 
     @property
     def T(self):
