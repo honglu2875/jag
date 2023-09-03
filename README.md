@@ -11,6 +11,9 @@ almost like **JA**X except that we have **G**raphs as central objects lol.
 I want to write a custom deep learning framework with **the computation graphs** being
 the first class citizens. Everything else goes around that.
 
+In other words, I want it to become an IR (intermediate representation) as graphs that targets high-level deep-learning
+frameworks such as PyTorch/Tensorflow/JAX, rather than low-level backends such as CUDA/MKL.
+
 Why:
 1. For my own learning
 2. A computation graph is universal: it doesn't care about the language as long as you implement each node operation.

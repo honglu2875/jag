@@ -1,11 +1,20 @@
 from dataclasses import dataclass
-import numpy as np
-from typing import Optional, Any
 from functools import singledispatchmethod
 from numbers import Number
+from typing import Any, Optional
+
+import numpy as np
 
 from jag.ops import Operand, TraceableOp
 from jag.type import ArrayLike
+
+
+def get_value(node: "TracedArray") -> str:
+    return (
+        str(node.value.tolist())
+        if node.value
+        else f"Array({node.shape}, dtype={node.dtype})"
+    )
 
 
 @dataclass
@@ -13,10 +22,71 @@ class Node(Operand):
     op: Any
     operands: list
     shape: tuple
+    name: Optional[str] = None
     kwargs: Optional[dict] = None
 
     def __post_init__(self):
         self.kwargs = self.kwargs or {}
+
+    @singledispatchmethod
+    def execute(self, *args):
+        return Node._execute(self, dict(zip([id(l) for l in get_leaves(self)], args)))
+
+    @execute.register
+    def _(self, node_values: dict):
+        return Node._execute(self, node_values)
+
+    @staticmethod
+    def _execute(node: Operand, value_dict: dict):
+        """
+        Recursively execute the graph from the node, with the given values of the leaves.
+        Args:
+            node: the node to execute.
+            value_dict: the dictionary of values of the leaves.
+        Returns:
+            the value of the node.
+        """
+        if isinstance(node, ConstantArray):
+            return node.value
+        elif isinstance(node, TracedArray):
+            return value_dict[id(node)]
+        elif isinstance(node, Node):
+            return node.op(
+                *[Node._execute(child, value_dict) for child in node.operands],
+                **node.kwargs,
+            )
+        else:
+            raise ValueError(f"Unsupported node type: {type(node)}.")
+
+    def to_str(self):
+        """
+        I do not override __str__ because I have not decided whether to use this way to serialize into pseudo-codes.
+        """
+
+        def _to_str(node: Operand, depth: int):
+            spaces = " " * (depth * 2)
+            if isinstance(node, TracedArray):
+                return f"{spaces}{node.name} = {get_value(node)}"
+            elif isinstance(node, Node):
+                if isinstance(node.op, TraceableOp):
+                    op_name = node.op.name
+                else:
+                    op_name = node.op.__name__
+                delimiter = ",\n"
+                kwarg_str = (
+                    [", ".join([f"{spaces}  {k}={v}" for k, v in node.kwargs.items()])]
+                    if node.kwargs
+                    else []
+                )
+                return (
+                    f"{spaces}{op_name}(\n"
+                    f"{delimiter.join([_to_str(child, depth + 1) for child in node.operands] + kwarg_str)}\n"
+                    f"{spaces})"
+                )
+            else:
+                raise ValueError(f"Unsupported node type: {type(node)}.")
+
+        return _to_str(self, 0)
 
 
 @dataclass
@@ -24,9 +94,10 @@ class TracedArray(Operand):
     shape: tuple
     dtype: np.dtype
     value: Optional[ArrayLike] = None
+    name: Optional[str] = None
 
     @property
-    def require_grad(self):
+    def requires_grad(self):
         return True
 
     @singledispatchmethod
@@ -49,7 +120,7 @@ class ConstantArray(TracedArray):
         self.value = np.array(value)
 
     @property
-    def require_grad(self):
+    def requires_grad(self):
         return False
 
     def to_abstract(self):
@@ -68,3 +139,23 @@ def to_traceable(arg: Any):
         return ConstantArray(np.array(arg))
     else:
         raise RuntimeError(f"Unsupported argument type: {type(arg)}.")
+
+
+def get_leaves(node: Node, include_constant=False) -> list[TracedArray]:
+    """
+    Get the leaves of the graph.
+    """
+    leaves = []
+
+    def _get_leaves(node: Node):
+        if not include_constant and isinstance(node, ConstantArray):
+            return
+        if isinstance(node, TracedArray):
+            leaves.append(node)
+        else:
+            for operand in node.operands:
+                _get_leaves(operand)
+
+    _get_leaves(node)
+
+    return leaves

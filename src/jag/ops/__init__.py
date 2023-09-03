@@ -1,26 +1,26 @@
+from ._operand import Operand
 from ._ops import (
     _traceable_op_registry,
-    register_op,
+    add,
+    divide,
     get_op_registration,
-    squeeze,
-    unsqueeze,
+    log,
+    matmul,
+    multiply,
+    negative,
+    ones_like,
+    power,
+    register_op,
     repeat,
     reshape,
-    transpose,
-    zeros_like,
-    ones_like,
-    sum,
-    add,
+    squeeze,
     subtract,
-    negative,
-    multiply,
-    divide,
-    matmul,
+    sum,
+    transpose,
+    unsqueeze,
     where,
-    log,
-    power,
+    zeros_like,
 )
-from ._operand import Operand
 from ._traceable_op import TraceableOp
 
 __all__ = [

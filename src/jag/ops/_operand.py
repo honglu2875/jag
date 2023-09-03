@@ -3,7 +3,7 @@ from typing import Callable
 
 import numpy as np
 
-from ._ops import negative, add, subtract, multiply, matmul, divide, power, transpose
+from ._ops import add, divide, matmul, multiply, negative, power, subtract, transpose
 
 
 class Operand:

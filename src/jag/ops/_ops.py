@@ -1,5 +1,7 @@
 from typing import Callable, Optional
+
 import numpy as np
+
 from ._traceable_op import TraceableOp
 
 """
@@ -56,7 +58,11 @@ negative = TraceableOp(lambda x: -x, "negative")
 multiply = TraceableOp(np.multiply, "multiply")
 divide = TraceableOp(np.divide, "divide")
 matmul = TraceableOp(np.matmul, "matmul")
-where = TraceableOp(lambda x, y, condition=None: np.where(condition, x, y), "where", non_diff_args=[(2, "condition")])
+where = TraceableOp(
+    lambda x, y, condition=None: np.where(condition, x, y),
+    "where",
+    non_diff_args=[(2, "condition")],
+)
 log = TraceableOp(np.log, "log")
 power = TraceableOp(np.power, "power")
 
@@ -99,7 +105,7 @@ def squeeze_vjp(g, x, **kwargs):
             g, axis=tuple(idx for idx, size in enumerate(x.shape) if size == 1)
         )
     else:
-        return unsqueeze(g, axis=kwargs["axis"]),
+        return (unsqueeze(g, axis=kwargs["axis"]),)
 
 
 def repeat_vjp(g, x, **kwargs):
@@ -118,12 +124,18 @@ def repeat_vjp(g, x, **kwargs):
     repeats = kwargs["repeats"]
     if isinstance(repeats, int):
         if axis is None:
-            return sum(reshape(g, (*x.shape, repeats)), axis=-1),
+            return (sum(reshape(g, (*x.shape, repeats)), axis=-1),)
         else:
             # [aabbccddee] gets reshaped into [aa,bb,cc,dd,ee] and the repeated dim is summed over.
-            return sum(
-                reshape(g, x.shape[:axis] + (x.shape[axis], repeats) + x.shape[axis + 1 :]), axis=axis + 1
-            ),
+            return (
+                sum(
+                    reshape(
+                        g,
+                        x.shape[:axis] + (x.shape[axis], repeats) + x.shape[axis + 1 :],
+                    ),
+                    axis=axis + 1,
+                ),
+            )
     elif isinstance(repeats, np.ndarray):
         # TODO: implement this
         raise NotImplementedError
@@ -149,7 +161,7 @@ def sum_vjp(g, x, **kwargs):
             g.shape[a] == 1
         ), f"Invalid dimension {a} on the out-gradient tensor. Got {g.shape[a]}."
         g = repeat(g, repeats=x.shape[a], axis=a)
-    return g,
+    return (g,)
 
 
 def matmul_vjp(g, x, y, **kwargs):
@@ -163,7 +175,9 @@ def matmul_vjp(g, x, y, **kwargs):
         if len(lhs.shape) == 1 and len(rhs.shape) == 2:
             return matmul(rhs, g)
         ndim = len(rhs.shape)
-        return matmul(g, transpose(rhs, axes=tuple(range(ndim - 2)) + (ndim - 1, ndim - 2)))
+        return matmul(
+            g, transpose(rhs, axes=tuple(range(ndim - 2)) + (ndim - 1, ndim - 2))
+        )
 
     def dot_rhs(g, lhs, rhs):
         if len(rhs.shape) == 0:
@@ -175,7 +189,9 @@ def matmul_vjp(g, x, y, **kwargs):
         if len(lhs.shape) == 1 and len(rhs.shape) == 2:
             return multiply(unsqueeze(lhs, axis=-1), g)
         ndim = len(lhs.shape)
-        return matmul(transpose(lhs, axes=tuple(range(ndim - 2)) + (ndim - 1, ndim - 2)), g)
+        return matmul(
+            transpose(lhs, axes=tuple(range(ndim - 2)) + (ndim - 1, ndim - 2)), g
+        )
 
     return dot_lhs(g, x, y), dot_rhs(g, x, y)
 
@@ -192,9 +208,9 @@ register_op(
 register_op(
     "unsqueeze",
     unsqueeze,
-    vjp=lambda g, x, **kwargs: (squeeze(
-        g, axis=kwargs["axis"]
-    ),),  # unsqueeze must have a broadcasted axis
+    vjp=lambda g, x, **kwargs: (
+        squeeze(g, axis=kwargs["axis"]),
+    ),  # unsqueeze must have a broadcasted axis
     jvp=lambda g, x, **kwargs: unsqueeze(g, axis=kwargs["axis"]),
 )
 register_op(
@@ -208,30 +224,30 @@ register_op(
 register_op(
     "reshape",
     reshape,
-    vjp=lambda g, x, **kwargs: (reshape(
-        g, newshape=x.shape
-    ),),  # restore the vector to the original shape
+    vjp=lambda g, x, **kwargs: (
+        reshape(g, newshape=x.shape),
+    ),  # restore the vector to the original shape
     jvp=lambda g, x, **kwargs: reshape(g, **kwargs),
 )  # reshape the vector directly to the new shape
 register_op(
     "transpose",
     transpose,
-    vjp=lambda g, x, **kwargs: (transpose(
-        g, axes=np.argsort(kwargs["axes"])
-    ),),  # restore the transposition
+    vjp=lambda g, x, **kwargs: (
+        transpose(g, axes=np.argsort(kwargs["axes"])),
+    ),  # restore the transposition
     jvp=lambda g, x, **kwargs: transpose(g, axes=kwargs["axes"]),
 )
 register_op(
     "zeros_like",
     zeros_like,
     vjp=lambda g, x, **kwargs: (zeros_like(x),),
-    jvp=lambda g, x, **kwargs: zeros_like(x)
+    jvp=lambda g, x, **kwargs: zeros_like(x),
 )
 register_op(
     "ones_like",
     ones_like,
     vjp=lambda g, x, **kwargs: (zeros_like(x),),
-    jvp=lambda g, x, **kwargs: zeros_like(x)
+    jvp=lambda g, x, **kwargs: zeros_like(x),
 )
 
 register_op(
@@ -282,9 +298,11 @@ register_op(
 register_op(
     "where",
     where,
-    vjp=lambda g, x, y, **kwargs: (where(g, zeros_like(g), condition=kwargs["condition"]),
-                                   where(zeros_like(g), g, condition=kwargs["condition"])),
-    jvp=lambda g, h, x, y, **kwargs: where(g, h, condition=kwargs["condition"])
+    vjp=lambda g, x, y, **kwargs: (
+        where(g, zeros_like(g), condition=kwargs["condition"]),
+        where(zeros_like(g), g, condition=kwargs["condition"]),
+    ),
+    jvp=lambda g, h, x, y, **kwargs: where(g, h, condition=kwargs["condition"]),
 )
 register_op(
     "log",
@@ -295,7 +313,9 @@ register_op(
 register_op(
     "power",
     power,
-    vjp=lambda g, x, y, **kwargs: (unbroadcast(x, g * y * power(x, where(y - 1, 1.0, y))),
-                                   unbroadcast(y, g * log(where(x, 1.0, x)) * power(x, y))),
-    jvp=lambda g, h, x, y, **kwargs: (h * log(x) + y * g / x) * power(x, y)
+    vjp=lambda g, x, y, **kwargs: (
+        unbroadcast(x, g * y * power(x, where(y - 1, 1.0, y))),
+        unbroadcast(y, g * log(where(x, 1.0, x)) * power(x, y)),
+    ),
+    jvp=lambda g, h, x, y, **kwargs: (h * log(x) + y * g / x) * power(x, y),
 )

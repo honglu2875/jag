@@ -1,7 +1,5 @@
-import warnings
 from dataclasses import dataclass
-from numbers import Number
-from typing import Any, Callable, Optional, Sequence, Type
+from typing import Callable, Optional, Sequence, Type
 
 import numpy as np
 
@@ -34,6 +32,7 @@ class TraceableOp:
     # We use this feature below to avoid circular import by pushing the Node object (dependent on TraceableOp itself)
     #   at import-time.
     _global_node_cls = []
+    _global_leaf_cls = []
     _to_traceable_fn = []
 
     def __post_init__(self):
@@ -73,18 +72,15 @@ class TraceableOp:
         args, kwargs = self._arg_preprocess(args, kwargs)
 
         trace = kwargs.pop("trace", False)
-        if any(isinstance(arg, self.node_cls) for arg in args):
-            warnings.warn(
-                f"Arguments contain abstract objects (Operand, Node, TracedArray, etc.). "
-                f"Forcing 'trace=True' to trace the computation graph."
-            )
+        if any(isinstance(arg, (self.node_cls, self.leaf_cls)) for arg in args):
             trace = True
 
         if trace:
+            traceable_args = [self.to_traceable(arg) for arg in args]
             return self.node_cls(
                 op=self,
-                operands=[self.to_traceable(arg) for arg in args],
-                shape=self.shape_fn(*[arg.shape for arg in args], **kwargs),
+                operands=traceable_args,
+                shape=self.shape_fn(*[arg.shape for arg in traceable_args], **kwargs),
                 kwargs=kwargs,
             )
         else:
@@ -98,12 +94,24 @@ class TraceableOp:
 
     @property
     def node_cls(self) -> Type:
-        assert len(self._global_node_cls) == 1, "The 'Node' class is either not defined or ambiguous. " \
-                                                "Most likely the library is not imported correctly."
+        assert len(self._global_node_cls) == 1, (
+            "The 'Node' class is either not defined or ambiguous. "
+            "Most likely the library is not imported correctly."
+        )
         return self._global_node_cls[0]
 
     @property
+    def leaf_cls(self) -> Type:
+        assert len(self._global_leaf_cls) == 1, (
+            "The 'Leaf' class is either not defined or ambiguous. "
+            "Most likely the library is not imported correctly."
+        )
+        return self._global_leaf_cls[0]
+
+    @property
     def to_traceable(self) -> Callable:
-        assert len(self._to_traceable_fn) == 1, "The 'to_traceable' function is either not defined or ambiguous. " \
-                                                "Most likely the library is not imported correctly."
+        assert len(self._to_traceable_fn) == 1, (
+            "The 'to_traceable' function is either not defined or ambiguous. "
+            "Most likely the library is not imported correctly."
+        )
         return self._to_traceable_fn[0]
