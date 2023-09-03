@@ -124,7 +124,7 @@ def repeat_vjp(g, x, **kwargs):
     repeats = kwargs["repeats"]
     if isinstance(repeats, int):
         if axis is None:
-            return (sum(reshape(g, (*x.shape, repeats)), axis=-1),)
+            return sum(reshape(g, (*x.shape, repeats)), axis=-1),
         else:
             # [aabbccddee] gets reshaped into [aa,bb,cc,dd,ee] and the repeated dim is summed over.
             return (

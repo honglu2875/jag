@@ -5,7 +5,7 @@ from jag.graph import Node, get_leaves, ConstantArray, TracedArray
 from jag.ops import get_op_registration
 from jag.type import ArrayLike
 from jag.utils import topsort
-
+import numpy as np
 
 def vjp(root: Node):
     sorted_nodes = topsort(
@@ -30,11 +30,10 @@ def vjp(root: Node):
                     )
 
     def backprop(g: ArrayLike, node_values: dict) -> dict:
-        backprop_values = {}
-        for node in sorted_nodes:
-            if not backprop_values:
-                backprop_values[id(node)] = g
+        backprop_values = {id(l): np.zeros(l.shape, dtype=l.dtype) for l in leaves}
+        backprop_values[id(sorted_nodes[0])] = g  # Initial vector to be pulled back
 
+        for node in sorted_nodes:
             assert (
                 id(node) in backprop_values
             ), f"Backpropagation error. Most likely the graph is broken.\nGraph:{root}"
@@ -45,9 +44,10 @@ def vjp(root: Node):
                 *[node_values[id(child)] for child in node.operands],
                 **node.kwargs,
             )
-            backprop_values.update(
-                {id(child): value for child, value in zip(node.operands, node_output)}
-            )
+            for child, value in zip(node.operands, node_output):
+                # In case of custom ring structure, one can change "+" into the corresponding op.
+                backprop_values[id(child)] = backprop_values.setdefault(id(child), 0) + value
+
         return backprop_values
 
     def compute_leaf_gradients(
@@ -59,7 +59,7 @@ def vjp(root: Node):
         propagate_values(node_values)
         result = backprop(g, node_values)
         if as_tuple:
-            return tuple(result[id(l)] for l in leaves)
+            return tuple(result.get(id(l), ...) for l in leaves)
         else:
             assert all(id_to_obj[id(l)].name for l in leaves)
             return {id_to_obj[id(l)].name: result[l] for l in leaves}
