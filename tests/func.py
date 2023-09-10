@@ -41,3 +41,31 @@ def d3(x, y, z):
 
 def f1_kw(x, y, z):
     return jnp.sum(x @ y, axis=-1)
+
+
+def f4(x, *args):
+    return (jnp.exp(x) + jnp.exp(-x)) / x
+
+
+def d4(x, *args):
+    return (((jnp.exp(x) - jnp.exp(-x)) * x - (jnp.exp(x) + jnp.exp(-x))) / (x**2),)
+
+
+def dd4(x):
+    return (
+        f4(x)
+        - 2 * (jnp.exp(x) - jnp.exp(-x)) / (x**2)
+        + 2 * (jnp.exp(x) + jnp.exp(-x)) / (x**3),
+    )
+
+
+def f5(x, *args):
+    y = x[:2, :2]
+    return jnp.sum(jnp.log(y @ y) ** 2) ** 2
+
+
+def d5(x, *args):
+    y = x[:2, :2]
+    r = 2 * jnp.sum(jnp.log(y @ y) ** 2) * 2 * jnp.log(y @ y) / (y @ y)
+    r = y.T @ r + r @ y.T
+    return (jnp.replace(jnp.zeros_like(x), r, (slice(None, 2), slice(None, 2))),)

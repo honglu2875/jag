@@ -26,6 +26,7 @@ from jag.ops import (add, at, divide, exp, get_op_registration, log, matmul,
         (log, {}, jnp.log),
         (exp, {}, jnp.exp),
         (at, {"idx": slice(1, 2)}, at.op),
+        (at, {"idx": (slice(1, 2), slice(1, 2))}, at.op),
     ],
 )
 def test_jvp_and_vjp_unary_ops(op, kwargs, jax_op):
@@ -72,14 +73,26 @@ def test_jvp_and_vjp_unary_ops(op, kwargs, jax_op):
 )
 def test_jvp_and_vjp_binary_ops(op, kwargs, jax_op):
     if op.name == "matmul":
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 2, 4, 3)).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 2, 4, 3)).astype(np.float64)
+        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 2, 4, 3)
+        ).astype(np.float64)
+        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 2, 4, 3)
+        ).astype(np.float64)
     elif op.name == "replace":
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 1, 1, 2)).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 1, 1, 2)).astype(np.float64)
+        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 1, 1, 2)
+        ).astype(np.float64)
+        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 1, 1, 2)
+        ).astype(np.float64)
     else:
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 2, 3, 4)).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random((1, 2, 3, 4)).astype(np.float64)
+        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 2, 3, 4)
+        ).astype(np.float64)
+        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+            (1, 2, 3, 4)
+        ).astype(np.float64)
     jvp_fn = get_op_registration(op.name)["jvp"]
     tangent_out = jvp_fn(*tangent, *primal, **kwargs)
     jax_op = jax_op or op.op

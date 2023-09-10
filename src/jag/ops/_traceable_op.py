@@ -27,6 +27,7 @@ class TraceableOp:
     op: Callable
     name: str
     shape_fn: Optional[Callable] = None
+    out_dtype: Optional[np.dtype] = None
     non_diff_args: Optional[Sequence[tuple[int, str]]] = None
     # Mutable members are shared across class objects. It is a feature, not a bug.
     # We use this feature below to avoid circular import by pushing the Node object (dependent on TraceableOp itself)
@@ -81,6 +82,8 @@ class TraceableOp:
                 op=self,
                 operands=traceable_args,
                 shape=self.shape_fn(*[arg.shape for arg in traceable_args], **kwargs),
+                dtype=self.out_dtype
+                or self._get_implied_dtype(traceable_args, **kwargs),
                 kwargs=kwargs,
             )
         else:
@@ -91,6 +94,10 @@ class TraceableOp:
 
     def __repr__(self):
         return str(self.__dict__)
+
+    def _get_implied_dtype(self, args, **kwargs) -> np.dtype:
+        dummies = [np.ones(arg.shape, dtype=arg.dtype) for arg in args]
+        return self.op(*dummies, **kwargs).dtype
 
     @property
     def node_cls(self) -> Type:

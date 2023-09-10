@@ -12,7 +12,7 @@ from jag.type import ArrayLike
 def get_value(node: "TracedArray") -> str:
     return (
         str(node.value.tolist())
-        if node.value
+        if node.value is not None
         else f"Array({node.shape}, dtype={node.dtype})"
     )
 
@@ -22,6 +22,7 @@ class Node(Operand):
     op: Any
     operands: list
     shape: tuple
+    dtype: np.dtype
     name: Optional[str] = None
     kwargs: Optional[dict] = None
 
@@ -141,17 +142,20 @@ def to_traceable(arg: Any):
         raise RuntimeError(f"Unsupported argument type: {type(arg)}.")
 
 
-def get_leaves(node: Node, include_constant=False) -> list[TracedArray]:
+def get_leaves(node: Node, include_constant=False, unique=True) -> list[TracedArray]:
     """
     Get the leaves of the graph.
     """
     leaves = []
+    used_leaf = set()
 
     def _get_leaves(node: Node):
         if not include_constant and isinstance(node, ConstantArray):
             return
         if isinstance(node, TracedArray):
-            leaves.append(node)
+            if not unique or id(node) not in used_leaf:
+                used_leaf.add(id(node))
+                leaves.append(node)
         else:
             for operand in node.operands:
                 _get_leaves(operand)

@@ -49,10 +49,11 @@ def vjp(root: Node):
                 *[node_values[id(child)] for child in node.operands],
                 **node.kwargs,
             )
+
             for child, value in zip(node.operands, node_output):
                 # In case of custom ring structure, one can change "+" into the corresponding op.
-                backprop_values[id(child)] = (
-                    backprop_values.setdefault(id(child), 0) + value
+                backprop_values[id(child)] = value + backprop_values.setdefault(
+                    id(child), np.zeros(child.shape, dtype=child.dtype)
                 )
 
         return backprop_values
@@ -85,3 +86,20 @@ def vjp(root: Node):
         return compute_leaf_gradients(g, node_values, **kwargs)
 
     return vjp_func
+
+
+def grad(root: Node):
+    assert (
+        np.prod(root.shape) == 1
+    ), "The output must be a singleton in order for gradient to make sense."
+    out_grad = np.ones(root.shape, dtype=root.dtype)
+    vjp_func = vjp(root)
+
+    def grad_func(*args, **kwargs):
+        return vjp_func(out_grad, *args, **kwargs)
+
+    return grad_func
+
+
+def jvp(root: Node):
+    ...
