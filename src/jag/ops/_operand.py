@@ -3,15 +3,16 @@ from typing import Callable
 
 import numpy as np
 
-from ._ops import (add, at, divide, matmul, multiply, negative, power,
-                   subtract, transpose, _traceable_op_registry, sum, unsqueeze, where)
-
+from ._ops import (_traceable_op_registry, add, at, divide, matmul, multiply,
+                   negative, power, subtract, sum, transpose, unsqueeze, where)
 
 _implemented_ufunc_call = {name: v["op"] for name, v in _traceable_op_registry.items()}
 # Special names
-_implemented_ufunc_call.update({
-    "expand_dims": unsqueeze,
-})
+_implemented_ufunc_call.update(
+    {
+        "expand_dims": unsqueeze,
+    }
+)
 _ufunc_reduce = {
     "add": sum,
 }
@@ -77,7 +78,9 @@ class Operand(np.lib.mixins.NDArrayOperatorsMixin):
         elif method == "reduce" and ufunc.__name__ in _ufunc_reduce:
             return _ufunc_reduce[ufunc.__name__](*inputs, **kwargs)
         else:
-            raise NotImplementedError(f"Not implemented.\nufunc: {ufunc}, method: {method}")
+            raise NotImplementedError(
+                f"Not implemented.\nufunc: {ufunc}, method: {method}"
+            )
 
     def __array_function__(self, func, types, args, kwargs):
         if func.__name__ in _implemented_ufunc_call:

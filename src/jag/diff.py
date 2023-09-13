@@ -150,13 +150,21 @@ def jvp(root: Node, include_value=True):
                 node_values[id(node)] = node.value
                 tangent_values[id(node)] = np.zeros(shape=node.shape, dtype=node.dtype)
             elif isinstance(node, TracedArray):
-                assert id(node) in node_values, f"The leaf {id(node)} is not provided a primal value."
-                assert id(node) in tangent_values, f"The leaf {id(node)} is not provided a tangent vector."
+                assert (
+                    id(node) in node_values
+                ), f"The leaf {id(node)} is not provided a primal value."
+                assert (
+                    id(node) in tangent_values
+                ), f"The leaf {id(node)} is not provided a tangent vector."
             else:
-                node_values[id(node)] = node.op(*[node_values[id(child)] for child in node.operands], **node.kwargs)
-                tangent_values[id(node)] = get_op_registration(node.op.name)["jvp"](*[tangent_values[id(child)] for child in node.operands],
-                                                                                    *[node_values[id(child)] for child in node.operands],
-                                                                                    **node.kwargs)
+                node_values[id(node)] = node.op(
+                    *[node_values[id(child)] for child in node.operands], **node.kwargs
+                )
+                tangent_values[id(node)] = get_op_registration(node.op.name)["jvp"](
+                    *[tangent_values[id(child)] for child in node.operands],
+                    *[node_values[id(child)] for child in node.operands],
+                    **node.kwargs,
+                )
 
     def jvp_func(*args, **kwargs):
         if not args:
@@ -173,14 +181,18 @@ def jvp(root: Node, include_value=True):
                     id(l): args[1][l.name] if l.name else l.value for l in leaves
                 }
             else:
-                raise ValueError("When there are two non-array positional arguments, the function accepts\n"
-                                 "1. tangent: tuple, primal: tuple, where the order of tuple corresponds to "
-                                 "the flattened order of leaves (when calling jag.graph.get_leaves).\n"
-                                 "2. tangent: dict, primal: dict, where the dicts map the names of the leaves "
-                                 "to the corresponding values.")
+                raise ValueError(
+                    "When there are two non-array positional arguments, the function accepts\n"
+                    "1. tangent: tuple, primal: tuple, where the order of tuple corresponds to "
+                    "the flattened order of leaves (when calling jag.graph.get_leaves).\n"
+                    "2. tangent: dict, primal: dict, where the dicts map the names of the leaves "
+                    "to the corresponding values."
+                )
         else:
             node_values = {id(l): val for l, val in zip(leaves, args[: len(args) // 2])}
-            tangent_values = {id(l): val for l, val in zip(leaves, args[len(args) // 2 :])}
+            tangent_values = {
+                id(l): val for l, val in zip(leaves, args[len(args) // 2 :])
+            }
 
         propagate_vector_values(node_values, tangent_values)
         if include_value:
@@ -189,4 +201,3 @@ def jvp(root: Node, include_value=True):
             return tangent_values[id(root)]
 
     return jvp_func
-

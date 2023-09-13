@@ -1,5 +1,5 @@
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 
 
 def f1(x, y, z):
@@ -87,4 +87,4 @@ def d5(x, *args):
     # Test assignment
     xx = np.zeros_like(x)
     xx[:2, :2] = r
-    return xx,
+    return (xx,)

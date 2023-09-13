@@ -1,7 +1,8 @@
+import jax
 import numpy as np
 import pytest
-from func import f1, f2, f3, jf3, f4, jf4, f5, jf5
-import jax
+from func import f1, f2, f3, f4, f5, jf3, jf4, jf5
+
 from jag.diff import jvp
 from jag.trace import trace
 
