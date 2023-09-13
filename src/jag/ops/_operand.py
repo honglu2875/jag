@@ -4,10 +4,20 @@ from typing import Callable
 import numpy as np
 
 from ._ops import (add, at, divide, matmul, multiply, negative, power,
-                   subtract, transpose)
+                   subtract, transpose, _traceable_op_registry, sum, unsqueeze, where)
 
 
-class Operand:
+_implemented_ufunc_call = {name: v["op"] for name, v in _traceable_op_registry.items()}
+# Special names
+_implemented_ufunc_call.update({
+    "expand_dims": unsqueeze,
+})
+_ufunc_reduce = {
+    "add": sum,
+}
+
+
+class Operand(np.lib.mixins.NDArrayOperatorsMixin):
     def __neg__(self):
         return negative(self)
 
@@ -56,6 +66,24 @@ class Operand:
     @property
     def T(self):
         return transpose(self)
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # Special treatment for "where"
+        if ufunc.__name__ == "where":
+            return where(inputs[1], inputs[2], inputs[0], *inputs[3:], **kwargs)
+        # Call corresponding wrappers
+        if method == "__call__" and ufunc.__name__ in _implemented_ufunc_call:
+            return _implemented_ufunc_call[ufunc.__name__](*inputs, **kwargs)
+        elif method == "reduce" and ufunc.__name__ in _ufunc_reduce:
+            return _ufunc_reduce[ufunc.__name__](*inputs, **kwargs)
+        else:
+            raise NotImplementedError(f"Not implemented.\nufunc: {ufunc}, method: {method}")
+
+    def __array_function__(self, func, types, args, kwargs):
+        if func.__name__ in _implemented_ufunc_call:
+            return _implemented_ufunc_call[func.__name__](*args, **kwargs)
+        else:
+            raise NotImplementedError(f"Not implemented.\nfunc: {func}, types: {types}")
 
     @staticmethod
     def to_dict(o):
