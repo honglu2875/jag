@@ -3,7 +3,7 @@ import pytest
 from func import d1, d2, d3, d4, d5, dd4, f1, f2, f3, f4, f5
 
 from jag.diff import grad, vjp
-from jag.trace import trace
+from jag._trace import trace
 
 
 @pytest.mark.parametrize(

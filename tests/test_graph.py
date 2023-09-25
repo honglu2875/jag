@@ -4,7 +4,7 @@ from func import f1, f1_kw
 
 import jag.ops as jnp
 from jag.diff import vjp
-from jag.trace import trace
+from jag._trace import trace
 
 
 @pytest.mark.parametrize("func", [f1, f1_kw])

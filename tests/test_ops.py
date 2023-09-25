@@ -5,10 +5,29 @@ import jax.random
 import numpy as np
 import pytest
 
-from jag.ops import (add, at, divide, exp, get_op_registration, log, matmul,
-                     multiply, negative, ones_like, power, repeat, replace,
-                     reshape, squeeze, subtract, sum, transpose, unsqueeze,
-                     where, zeros_like)
+from jag.ops import (
+    add,
+    at,
+    divide,
+    exp,
+    get_op_registration,
+    log,
+    matmul,
+    multiply,
+    negative,
+    ones_like,
+    power,
+    repeat,
+    replace,
+    reshape,
+    squeeze,
+    subtract,
+    sum,
+    transpose,
+    unsqueeze,
+    where,
+    zeros_like,
+)
 
 
 @pytest.mark.parametrize(

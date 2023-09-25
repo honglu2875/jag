@@ -82,8 +82,8 @@ power = TraceableOp(np.power, "power")
 
 def unbroadcast(target, g, broadcast_idx=0):
     """
-    'target' is the operand that is broadcasted to 'g'. We need to sum 'g' along the broadcasted axes.
-    In the ordinary broadcasting convention, 'target' is broadcasted to 'g' by
+    'target' is the operand that is broadcast to 'g'. We need to sum 'g' along the broadcast axes.
+    In the ordinary broadcasting convention, 'target' is broadcast to 'g' by
     1. first adding leading singleton dimensions to 'target' until it has the same number of dimensions as 'g'
     2. then repeating 'target' along the singleton dimensions until it has the same shape as 'g'
     """
@@ -123,7 +123,7 @@ def repeat_vjp(g, x, **kwargs):
     The vjp of 'np.repeat' is to sum the vector along the repeated axis.
     We put 'repeats' into keyword arguments because it is non-differentiable.
     Now there are two cases:
-    1. if repeats is an 'int', the case is easy and we just sum across the corresponding axis.
+    1. if repeats is an 'int', the case is easy, and we just sum across the corresponding axis.
     2. if the repeats is an array, we need to sum over the axis with extra care.
     In addition, if axis=None, 'np.repeat' flattens the array and vjp reconstructs the original shape.
     """
@@ -220,7 +220,7 @@ register_op(
     unsqueeze,
     vjp=lambda g, x, **kwargs: (
         squeeze(g, axis=kwargs["axis"]),
-    ),  # unsqueeze must have a broadcasted axis
+    ),  # unsqueeze must have a broadcast axis
     jvp=lambda g, x, **kwargs: unsqueeze(g, axis=kwargs["axis"]),
 )
 register_op(

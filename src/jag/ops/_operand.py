@@ -3,8 +3,22 @@ from typing import Callable
 
 import numpy as np
 
-from ._ops import (_traceable_op_registry, add, at, divide, matmul, multiply,
-                   negative, power, subtract, sum, transpose, unsqueeze, where)
+from ._ops import (
+    _traceable_op_registry,
+    add,
+    at,
+    divide,
+    matmul,
+    multiply,
+    negative,
+    power,
+    subtract,
+    sum,
+    transpose,
+    unsqueeze,
+    where,
+    replace,
+)
 
 _implemented_ufunc_call = {name: v["op"] for name, v in _traceable_op_registry.items()}
 # Special names
@@ -63,6 +77,10 @@ class Operand(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __getitem__(self, item):
         return at(self, item)
+
+    def __setitem__(self, key, value):
+        # self = replace(self, value, idx=key)
+        raise NotImplementedError("Not implemented.")
 
     @property
     def T(self):

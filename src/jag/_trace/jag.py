@@ -2,7 +2,7 @@ from typing import Callable, Optional, Sequence
 
 import numpy as np
 
-from jag.graph import ConstantArray, TracedArray, to_traceable
+from jag.graph import ConstantArray, TracedArray
 
 
 def trace(func: Callable, *args, constants: Optional[Sequence] = None, **kwargs):

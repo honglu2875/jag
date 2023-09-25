@@ -128,7 +128,7 @@ class ConstantArray(TracedArray):
         return TracedArray(shape=self.shape, dtype=self.dtype, value=self.value)
 
 
-def to_traceable(arg: Any):
+def to_traceable(arg: Any) -> Operand:
     """
     Convert the argument into a part of the computation graph for tracing:
     1. if arg is a subclass of Operand, it is a part of the graph and is already traceable.
