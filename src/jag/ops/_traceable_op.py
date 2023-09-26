@@ -3,6 +3,21 @@ from typing import Callable, Optional, Sequence, Type
 
 import numpy as np
 
+"""
+Traceable ops along with its vector-Jacobian function and Jacobian-vector function 
+are registered in `_traceable_op_registry`. We expose the following functions
+for its manipulation.
+- `register_op`
+- `get_registered_ops`
+"""
+
+
+def _assert_non_traceable(kwargs, cls):
+    assert all(not isinstance(arg, cls) for arg in kwargs), (
+        "All values of keyword arguments must be non-traceable. "
+        "Or it might invoke an infinite recursion during tracing."
+    )
+
 
 @dataclass
 class TraceableOp:
@@ -35,11 +50,14 @@ class TraceableOp:
     _global_node_cls = []
     _global_leaf_cls = []
     _to_traceable_fn = []
+    # Ops registration is shared across class objects.
+    _traceable_op_registry = {}
 
     def __post_init__(self):
         if self.shape_fn is None:
 
             def shape_fn(*shapes, **kwargs):
+                _assert_non_traceable(kwargs, (self.node_cls, self.leaf_cls))
                 dummies = [np.ones(shape) for shape in shapes]
                 return self.op(*dummies, **kwargs).shape
 
@@ -73,17 +91,23 @@ class TraceableOp:
         args, kwargs = self._arg_preprocess(args, kwargs)
 
         trace = kwargs.pop("trace", False)
-        if any(isinstance(arg, (self.node_cls, self.leaf_cls)) for arg in args):
+        if any(
+            isinstance(arg, (self.node_cls, self.leaf_cls))
+            for arg in args + tuple(kwargs.values())
+        ):
             trace = True
 
         if trace:
             traceable_args = [self.to_traceable(arg) for arg in args]
+            dummy_kwargs = self._convert_kwargs_to_nontraceable(kwargs)
             return self.node_cls(
                 op=self,
                 operands=traceable_args,
-                shape=self.shape_fn(*[arg.shape for arg in traceable_args], **kwargs),
+                shape=self.shape_fn(
+                    *[arg.shape for arg in traceable_args], **dummy_kwargs
+                ),
                 dtype=self.out_dtype
-                or self._get_implied_dtype(traceable_args, **kwargs),
+                or self._get_implied_dtype(traceable_args, **dummy_kwargs),
                 kwargs=kwargs,
             )
         else:
@@ -96,8 +120,18 @@ class TraceableOp:
         return str(self.__dict__)
 
     def _get_implied_dtype(self, args, **kwargs) -> np.dtype:
+        _assert_non_traceable(kwargs, (self.node_cls, self.leaf_cls))
         dummies = [np.ones(arg.shape, dtype=arg.dtype) for arg in args]
         return self.op(*dummies, **kwargs).dtype
+
+    def _convert_kwargs_to_nontraceable(self, kwargs):
+        """A utility function to convert all traceable arguments in kwargs to dummy zeros."""
+        return {
+            k: np.zeros(shape=v.shape, dtype=v.dtype)
+            if isinstance(v, (self.node_cls, self.leaf_cls))
+            else v
+            for k, v in kwargs.items()
+        }
 
     @property
     def node_cls(self) -> Type:
@@ -122,3 +156,43 @@ class TraceableOp:
             "Most likely the library is not imported correctly."
         )
         return self._to_traceable_fn[0]
+
+    def register_op(
+        self,
+        name: Optional[str] = None,
+        vjp: Optional[Callable] = None,
+        jvp: Optional[Callable] = None,
+        overwrite: bool = False,
+    ):
+        name = name or self.name
+        if not overwrite and name in TraceableOp._traceable_op_registry:
+            raise ValueError(
+                f"'{name}' already exists in the op registry. "
+                f"If you wish to overwrite, please set 'overwrite=True'."
+            )
+        self._traceable_op_registry[name] = {"op": self, "vjp": vjp, "jvp": jvp}
+        return self
+
+    @classmethod
+    def get_op_registration(cls, name: str) -> dict:
+        return cls._traceable_op_registry.get(name, None)
+
+
+def register_op(
+    name: str,
+    traceable_op: TraceableOp,
+    vjp: Optional[Callable],
+    jvp: Optional[Callable],
+    overwrite: bool = False,
+):
+    """
+    Convenient global function to register an op.
+    """
+    traceable_op.register_op(name, vjp, jvp, overwrite)
+
+
+def get_op_registration(name: str) -> dict:
+    """
+    Convenient global function to get an op registration.
+    """
+    return TraceableOp.get_op_registration(name)

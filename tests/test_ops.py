@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from jag.ops import (
+    TraceableOp,
     add,
     at,
     divide,
@@ -27,6 +28,15 @@ from jag.ops import (
     unsqueeze,
     where,
     zeros_like,
+    sin,
+    cos,
+    tan,
+    sinh,
+    cosh,
+    tanh,
+    arcsin,
+    arccos,
+    arctan,
 )
 
 
@@ -46,9 +56,18 @@ from jag.ops import (
         (exp, {}, jnp.exp),
         (at, {"idx": slice(1, 2)}, at.op),
         (at, {"idx": (slice(1, 2), slice(1, 2))}, at.op),
+        (sin, {}, jnp.sin),
+        (cos, {}, jnp.cos),
+        (tan, {}, jnp.tan),
+        (sinh, {}, jnp.sinh),
+        (cosh, {}, jnp.cosh),
+        (tanh, {}, jnp.tanh),
+        (arcsin, {}, jnp.arcsin),
+        (arccos, {}, jnp.arccos),
+        (arctan, {}, jnp.arctan),
     ],
 )
-def test_jvp_and_vjp_unary_ops(op, kwargs, jax_op):
+def test_jvp_and_vjp_unary_ops(op: TraceableOp, kwargs, jax_op):
     primal = np.random.random((1, 2, 3, 4)).astype(np.float64)
     tangent = np.random.random((1, 2, 3, 4)).astype(np.float64)
     jvp_fn = get_op_registration(op.name)["jvp"]
@@ -90,7 +109,7 @@ def test_jvp_and_vjp_unary_ops(op, kwargs, jax_op):
         ),
     ],
 )
-def test_jvp_and_vjp_binary_ops(op, kwargs, jax_op):
+def test_jvp_and_vjp_binary_ops(op: TraceableOp, kwargs, jax_op):
     if op.name == "matmul":
         primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
             (1, 2, 4, 3)

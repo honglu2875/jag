@@ -3,9 +3,14 @@ from typing import List, Set, Optional
 from jag.graph import Node, Operand, TracedArray
 
 
-def topsort(node: Node):
+def topsort(node: Node, include_kwargs: bool = False):
     """
     Topological sort the computation graph.
+    Args:
+        node: the root node of the graph.
+        include_kwargs: whether to include the nodes in kwargs at each node as its children.
+    Returns:
+        a list of nodes sorted from the leaves to the root.
     """
     visited = set()
     stack = []
@@ -19,6 +24,11 @@ def topsort(node: Node):
                 if id(operand) not in visited:
                     visited.add(id(operand))
                     _topsort(operand, stack, visited)
+            if include_kwargs:
+                for operand in node.kwargs.values():
+                    if isinstance(operand, Node) and id(operand) not in visited:
+                        visited.add(id(operand))
+                        _topsort(operand, stack, visited)
         stack.append(node)
 
     _topsort(node, stack, visited)
@@ -40,12 +50,15 @@ def name_generator():
         cnt += 1
 
 
-def map_nodes(root: Node, incomplete_map: Optional[dict] = None) -> dict:
+def map_nodes(
+    root: Node, incomplete_map: Optional[dict] = None, include_kwargs: bool = True
+) -> dict:
     """
     Create a mapping from the id of each node to their unique variable names.
     Args:
         root: the root node of the graph.
         incomplete_map: a possibly incomplete dictionary mapping the id of a node to its variable name.
+        include_kwargs: whether to include the nodes in kwargs at each node as its children.
     Returns:
         a complete mapping from the id of each node to their unique variable names.
     """
@@ -54,7 +67,7 @@ def map_nodes(root: Node, incomplete_map: Optional[dict] = None) -> dict:
     _name_map = {}
     _used_names = set()
 
-    def _map_nodes(node: Node):
+    def _map_nodes(node: Node | TracedArray):
         """
         Priority:
         0. if the node is already in _name_map, skip.
@@ -82,6 +95,10 @@ def map_nodes(root: Node, incomplete_map: Optional[dict] = None) -> dict:
         if isinstance(node, Node):
             for operand in node.operands:
                 _map_nodes(operand)
+            if include_kwargs:
+                for operand in node.kwargs.values():
+                    if isinstance(operand, (Node, TracedArray)):
+                        _map_nodes(operand)
 
     _map_nodes(root)
 

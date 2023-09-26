@@ -88,3 +88,16 @@ def d5(x, *args):
     xx = np.zeros_like(x)
     xx[:2, :2] = r
     return (xx,)
+
+
+def f6(x, y, z, *args):
+    a = x @ y
+    b = a - z
+    c = (y @ x)[:2, :2]
+    # implement relu
+    relu = np.sum(np.maximum(a, 0))
+    # implement gelu
+    gelu = np.sum(b * 0.5 * (1 + np.tanh(np.sqrt(2 / np.pi) * (b + 0.044715 * b**3))))
+    # implement elu
+    elu = np.sum(np.where(c > 0, c, np.exp(c) - 1))
+    return relu + gelu + elu

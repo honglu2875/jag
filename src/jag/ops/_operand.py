@@ -4,7 +4,6 @@ from typing import Callable
 import numpy as np
 
 from ._ops import (
-    _traceable_op_registry,
     add,
     at,
     divide,
@@ -17,10 +16,15 @@ from ._ops import (
     transpose,
     unsqueeze,
     where,
-    replace,
+    greater,
+    less,
 )
 
-_implemented_ufunc_call = {name: v["op"] for name, v in _traceable_op_registry.items()}
+from ._traceable_op import TraceableOp
+
+_implemented_ufunc_call = {
+    name: v["op"] for name, v in TraceableOp._traceable_op_registry.items()
+}
 # Special names
 _implemented_ufunc_call.update(
     {
@@ -35,6 +39,12 @@ _ufunc_reduce = {
 class Operand(np.lib.mixins.NDArrayOperatorsMixin):
     def __neg__(self):
         return negative(self)
+
+    def __gt__(self, other):
+        return greater(self, other)
+
+    def __lt__(self, other):
+        return less(self, other)
 
     def __add__(self, other):
         return add(self, other)
@@ -101,6 +111,8 @@ class Operand(np.lib.mixins.NDArrayOperatorsMixin):
             )
 
     def __array_function__(self, func, types, args, kwargs):
+        if func.__name__ == "where":
+            return where(args[1], args[2], args[0], *args[3:], **kwargs)
         if func.__name__ in _implemented_ufunc_call:
             return _implemented_ufunc_call[func.__name__](*args, **kwargs)
         else:
