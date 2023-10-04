@@ -1,30 +1,11 @@
-from ._trigs import sin, cos, tan, sinh, cosh, tanh, arcsin, arccos, arctan
-from ._arithmetics import (
-    sum,
-    add,
-    subtract,
-    negative,
-    multiply,
-    divide,
-    matmul,
-    log,
-    exp,
-    power,
-    sqrt,
-)
-from ._shapes import (
-    squeeze,
-    unsqueeze,
-    repeat,
-    reshape,
-    transpose,
-    zeros_like,
-    ones_like,
-    at,
-    replace,
-)
-from ._booleans import where, maximum, greater, less
-
+from ._arithmetics import (absolute, add, divide, exp, log, matmul, mean,
+                           multiply, negative, power, sign, sqrt, subtract,
+                           sum)
+from ._booleans import (clip, greater, greater_equal, less, less_equal,
+                        maximum, where)
+from ._shapes import (at, ones_like, repeat, replace, reshape, squeeze,
+                      transpose, unsqueeze, zeros_like)
+from ._trigs import arccos, arcsin, arctan, cos, cosh, sin, sinh, tan, tanh
 
 __all__ = [
     "squeeze",
@@ -35,13 +16,21 @@ __all__ = [
     "zeros_like",
     "ones_like",
     "sum",
+    "mean",
     "add",
+    "sign",
+    "absolute",
     "subtract",
     "negative",
     "multiply",
     "divide",
     "matmul",
     "where",
+    "greater",
+    "less",
+    "greater_equal",
+    "less_equal",
+    "clip",
     "at",
     "replace",
     "log",

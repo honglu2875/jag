@@ -2,13 +2,12 @@ from typing import Tuple
 
 import numpy as np
 
-from jag.graph import ConstantArray, Node, TracedArray, get_leaves
 from jag.ops import get_op_registration
-from jag.type import ArrayLike
+from jag.type import ArrayLike, GraphNode
 from jag.utils import topsort
 
 
-def vjp(root: Node):
+def vjp(root: GraphNode):
     """
     Compute the vjp function of the computational graph.
     Args:
@@ -33,7 +32,9 @@ def vjp(root: Node):
     sorted_nodes = topsort(
         root
     )  # top sorted from the output-node to leaves (variables to be diff'ed)
-    leaves = get_leaves(root)  # list of leaves (variables to be diff'ed)
+    leaves = list(
+        root.leaves(include_constant=False)
+    )  # list of leaves (variables to be diff'ed)
     id_to_obj = {id(node): node for node in sorted_nodes}
 
     def propagate_values(node_values: dict):
@@ -42,13 +43,9 @@ def vjp(root: Node):
         """
         for node in sorted_nodes[::-1]:
             if id(node) not in node_values:
-                if isinstance(node, ConstantArray):
+                if node.is_constant():
                     node_values[id(node)] = node.value
                 else:
-                    assert isinstance(node, Node), (
-                        f"Cannot propagate value for node {node}.\n"
-                        f"Likely a TracedArray is not given a concrete value."
-                    )
                     node_values[id(node)] = node.op(
                         *[node_values[id(child)] for child in node.operands],
                         **node.kwargs,
@@ -62,7 +59,7 @@ def vjp(root: Node):
             assert (
                 id(node) in backprop_values
             ), f"Backpropagation error. Most likely the graph is broken.\nGraph:{root}"
-            if isinstance(node, TracedArray):
+            if node.is_leaf():
                 continue
             node_output: Tuple = get_op_registration(node.op.name)["vjp"](
                 backprop_values[id(node)],
@@ -108,7 +105,7 @@ def vjp(root: Node):
     return vjp_func
 
 
-def grad(root: Node):
+def grad(root: GraphNode):
     assert (
         np.prod(root.shape) == 1
     ), "The output must be a singleton in order for gradient to make sense."
@@ -121,7 +118,7 @@ def grad(root: Node):
     return grad_func
 
 
-def jvp(root: Node, include_value=True):
+def jvp(root: GraphNode, include_value=True):
     """
     Compute the jvp function of the computational graph.
     Args:
@@ -141,14 +138,16 @@ def jvp(root: Node, include_value=True):
     sorted_nodes = topsort(
         root
     )  # top sorted from the output-node to leaves (variables to be diff'ed)
-    leaves = get_leaves(root)  # list of leaves (variables to be diff'ed)
+    leaves = list(
+        root.leaves(include_constant=False)
+    )  # list of leaves (variables to be diff'ed)
 
     def propagate_vector_values(node_values: dict, tangent_values: dict):
         for node in sorted_nodes[::-1]:
-            if isinstance(node, ConstantArray):
+            if node.is_constant():
                 node_values[id(node)] = node.value
                 tangent_values[id(node)] = np.zeros(shape=node.shape, dtype=node.dtype)
-            elif isinstance(node, TracedArray):
+            elif node.is_leaf():
                 assert (
                     id(node) in node_values
                 ), f"The leaf {id(node)} is not provided a primal value."

@@ -1,7 +1,7 @@
-from ._funcs import squeeze_vjp, repeat_vjp, _replace
-from .._traceable_op import TraceableOp
 import numpy as np
 
+from .._traceable_op import TraceableOp
+from ._funcs import _replace, repeat_vjp, squeeze_vjp
 
 squeeze = TraceableOp(np.squeeze, "squeeze").register_op(
     vjp=squeeze_vjp,  # Call unsqueeze and take special care of axis=None

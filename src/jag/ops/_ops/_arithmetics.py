@@ -1,14 +1,28 @@
-from ._funcs import sum_vjp, matmul_vjp, unbroadcast
-from .._traceable_op import TraceableOp
 import numpy as np
 
+from .._traceable_op import TraceableOp
+from ._funcs import matmul_vjp, sum_vjp, unbroadcast
 
 sum = TraceableOp(np.sum, "sum").register_op(
     vjp=sum_vjp, jvp=lambda g, x, **kwargs: np.sum(g, **kwargs)
 )
+mean = TraceableOp(np.mean, "mean").register_op(
+    vjp=lambda g, x, **kwargs: (
+        sum_vjp(g, x, **kwargs)[0] / (x.size // g.size),
+    ),  # todo: make it better?
+    jvp=lambda g, x, **kwargs: np.mean(g, **kwargs),
+)
 add = TraceableOp(np.add, "add").register_op(
     vjp=lambda g, x, y, **kwargs: (unbroadcast(x, g), unbroadcast(y, g)),
     jvp=lambda g, h, x, y, **kwargs: g + h,
+)
+sign = TraceableOp(np.sign, "sign").register_op(
+    vjp=lambda g, x, **kwargs: (np.zeros_like(x),),
+    jvp=lambda g, x, **kwargs: np.zeros_like(x),
+)
+absolute = TraceableOp(np.abs, "absolute").register_op(
+    vjp=lambda g, x, **kwargs: (g * np.sign(x),),
+    jvp=lambda g, x, **kwargs: g * np.sign(x),
 )
 subtract = TraceableOp(np.subtract, "subtract").register_op(
     vjp=lambda g, x, y, **kwargs: (unbroadcast(x, g), unbroadcast(y, -g)),

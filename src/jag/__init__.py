@@ -1,5 +1,5 @@
-from . import graph, ops, codegen
-from ._trace import trace
+from . import codegen, graph, ops
+from .graph import trace
 
 if not ops.TraceableOp._global_node_cls:
     ops.TraceableOp._global_node_cls.append(graph.Node)

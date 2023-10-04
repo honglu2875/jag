@@ -4,7 +4,7 @@ import pytest
 from func import f1, f2, f3, f4, f5, jf3, jf4, jf5
 
 from jag.diff import jvp
-from jag._trace import trace
+from jag.graph import trace
 
 
 @pytest.mark.parametrize(

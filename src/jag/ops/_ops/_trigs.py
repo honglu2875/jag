@@ -1,6 +1,6 @@
-from .._traceable_op import TraceableOp
 import numpy as np
 
+from .._traceable_op import TraceableOp
 
 sin = TraceableOp(np.sin, "sin").register_op(
     vjp=lambda g, x, **kwargs: (g * np.cos(x),),

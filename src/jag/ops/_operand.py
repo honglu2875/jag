@@ -3,23 +3,9 @@ from typing import Callable
 
 import numpy as np
 
-from ._ops import (
-    add,
-    at,
-    divide,
-    matmul,
-    multiply,
-    negative,
-    power,
-    subtract,
-    sum,
-    transpose,
-    unsqueeze,
-    where,
-    greater,
-    less,
-)
-
+from ._ops import (add, at, clip, divide, greater, greater_equal, less,
+                   less_equal, matmul, multiply, negative, power, subtract,
+                   sum, transpose, unsqueeze, where)
 from ._traceable_op import TraceableOp
 
 _implemented_ufunc_call = {
@@ -45,6 +31,12 @@ class Operand(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __lt__(self, other):
         return less(self, other)
+
+    def __ge__(self, other):
+        return greater_equal(self, other)
+
+    def __le__(self, other):
+        return less_equal(self, other)
 
     def __add__(self, other):
         return add(self, other)

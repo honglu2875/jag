@@ -5,39 +5,12 @@ import jax.random
 import numpy as np
 import pytest
 
-from jag.ops import (
-    TraceableOp,
-    add,
-    at,
-    divide,
-    exp,
-    get_op_registration,
-    log,
-    matmul,
-    multiply,
-    negative,
-    ones_like,
-    power,
-    repeat,
-    replace,
-    reshape,
-    squeeze,
-    subtract,
-    sum,
-    transpose,
-    unsqueeze,
-    where,
-    zeros_like,
-    sin,
-    cos,
-    tan,
-    sinh,
-    cosh,
-    tanh,
-    arcsin,
-    arccos,
-    arctan,
-)
+from jag.ops import (TraceableOp, absolute, add, arccos, arcsin, arctan, at,
+                     clip, cos, cosh, divide, exp, get_op_registration,
+                     greater, greater_equal, less, less_equal, log, matmul,
+                     mean, multiply, negative, ones_like, power, repeat,
+                     replace, reshape, sign, sin, sinh, squeeze, subtract, sum,
+                     tan, tanh, transpose, unsqueeze, where, zeros_like)
 
 
 @pytest.mark.parametrize(
@@ -49,6 +22,9 @@ from jag.ops import (
         (reshape, {"newshape": (-1, 6)}, None),
         (transpose, {"axes": (0, 2, 3, 1)}, None),
         (sum, {"axis": 2}, None),
+        (mean, {"axis": 2}, None),
+        (sign, {}, jnp.sign),
+        (absolute, {}, jnp.absolute),
         (negative, {}, None),
         (zeros_like, {}, jnp.zeros_like),
         (ones_like, {}, jnp.ones_like),
@@ -56,6 +32,7 @@ from jag.ops import (
         (exp, {}, jnp.exp),
         (at, {"idx": slice(1, 2)}, at.op),
         (at, {"idx": (slice(1, 2), slice(1, 2))}, at.op),
+        (clip, {"a_min": 0.5, "a_max": 1.0}, jnp.clip),
         (sin, {}, jnp.sin),
         (cos, {}, jnp.cos),
         (tan, {}, jnp.tan),
@@ -107,35 +84,46 @@ def test_jvp_and_vjp_unary_ops(op: TraceableOp, kwargs, jax_op):
             {"idx": (slice(0, 1), slice(1, 2), slice(1, 2), slice(0, 2))},
             lambda x, y, idx=None: x.at[idx].set(y),
         ),
+        # Different behavior in JAX: below derivatives would result in b'' instead of 0 in JAX
+        # (greater, {}, jnp.greater),
+        # (less, {}, jnp.less),
+        # (greater_equal, {}, jnp.greater_equal),
+        # (less_equal, {}, jnp.less_equal),
     ],
 )
 def test_jvp_and_vjp_binary_ops(op: TraceableOp, kwargs, jax_op):
+    _type = np.float32
+    j_type = jnp.float32
+
     if op.name == "matmul":
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+        primal = np.random.random((1, 2, 3, 4)).astype(_type), np.random.random(
             (1, 2, 4, 3)
-        ).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+        ).astype(_type)
+        tangent = np.random.random((1, 2, 3, 4)).astype(_type), np.random.random(
             (1, 2, 4, 3)
-        ).astype(np.float64)
+        ).astype(_type)
     elif op.name == "replace":
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+        primal = np.random.random((1, 2, 3, 4)).astype(_type), np.random.random(
             (1, 1, 1, 2)
-        ).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+        ).astype(_type)
+        tangent = np.random.random((1, 2, 3, 4)).astype(_type), np.random.random(
             (1, 1, 1, 2)
-        ).astype(np.float64)
+        ).astype(_type)
     else:
-        primal = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
+        primal = (
+            np.random.random((1, 2, 3, 4)).astype(_type),
+            np.random.random((1, 2, 3, 4)).astype(_type) + 1.0,
+        )  # to avoid division by zero
+        tangent = np.random.random((1, 2, 3, 4)).astype(_type), np.random.random(
             (1, 2, 3, 4)
-        ).astype(np.float64)
-        tangent = np.random.random((1, 2, 3, 4)).astype(np.float64), np.random.random(
-            (1, 2, 3, 4)
-        ).astype(np.float64)
+        ).astype(_type)
     jvp_fn = get_op_registration(op.name)["jvp"]
     tangent_out = jvp_fn(*tangent, *primal, **kwargs)
     jax_op = jax_op or op.op
     jax_tangent_out = jax.jvp(functools.partial(jax_op, **kwargs), primal, tangent)[1]
-    assert jnp.allclose(tangent_out, jax_tangent_out)
+    assert jnp.allclose(
+        jnp.array(tangent_out, dtype=j_type), jax_tangent_out.astype(j_type)
+    )
 
     cotangent = np.random.random(tangent_out.shape)
     vjp_fn = get_op_registration(op.name)["vjp"]
@@ -147,5 +135,9 @@ def test_jvp_and_vjp_binary_ops(op: TraceableOp, kwargs, jax_op):
     jax_cotangent_out = jax.vjp(functools.partial(jax_op, **kwargs), *primal)[1](
         cotangent
     )
-    assert jnp.allclose(cotangent_out[0], jax_cotangent_out[0])
-    assert jnp.allclose(cotangent_out[1], jax_cotangent_out[1])
+    assert jnp.allclose(
+        jnp.array(cotangent_out[0], dtype=j_type), jax_cotangent_out[0].astype(j_type)
+    )
+    assert jnp.allclose(
+        jnp.array(cotangent_out[1], dtype=j_type), jax_cotangent_out[1].astype(j_type)
+    )

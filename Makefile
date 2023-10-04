@@ -9,5 +9,9 @@ dev:
 test:
 	pytest tests/
 
+style:
+	black src/ tests/
+	isort src/ tests/
+
 .PHONY: 
 	test

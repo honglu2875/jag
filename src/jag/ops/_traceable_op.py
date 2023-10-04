@@ -3,6 +3,8 @@ from typing import Callable, Optional, Sequence, Type
 
 import numpy as np
 
+from jag.type import GraphNode
+
 """
 Traceable ops along with its vector-Jacobian function and Jacobian-vector function 
 are registered in `_traceable_op_registry`. We expose the following functions
@@ -91,10 +93,7 @@ class TraceableOp:
         args, kwargs = self._arg_preprocess(args, kwargs)
 
         trace = kwargs.pop("trace", False)
-        if any(
-            isinstance(arg, (self.node_cls, self.leaf_cls))
-            for arg in args + tuple(kwargs.values())
-        ):
+        if any(isinstance(arg, GraphNode) for arg in args + tuple(kwargs.values())):
             trace = True
 
         if trace:
@@ -120,16 +119,15 @@ class TraceableOp:
         return str(self.__dict__)
 
     def _get_implied_dtype(self, args, **kwargs) -> np.dtype:
-        _assert_non_traceable(kwargs, (self.node_cls, self.leaf_cls))
+        _assert_non_traceable(kwargs, GraphNode)
         dummies = [np.ones(arg.shape, dtype=arg.dtype) for arg in args]
         return self.op(*dummies, **kwargs).dtype
 
-    def _convert_kwargs_to_nontraceable(self, kwargs):
+    @staticmethod
+    def _convert_kwargs_to_nontraceable(kwargs):
         """A utility function to convert all traceable arguments in kwargs to dummy zeros."""
         return {
-            k: np.zeros(shape=v.shape, dtype=v.dtype)
-            if isinstance(v, (self.node_cls, self.leaf_cls))
-            else v
+            k: np.zeros(shape=v.shape, dtype=v.dtype) if isinstance(v, GraphNode) else v
             for k, v in kwargs.items()
         }
 

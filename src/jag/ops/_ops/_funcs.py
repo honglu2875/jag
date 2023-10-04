@@ -64,7 +64,7 @@ def matmul_vjp(g, x, y, **kwargs):
         if len(lhs.shape) == 1 and len(rhs.shape) == 1:
             return np.multiply(g, rhs)
         if len(lhs.shape) == 2 and len(rhs.shape) == 1:
-            return np.multiply(np.unsqueeze(g, axis=-1), rhs)
+            return np.multiply(np.expand_dims(g, axis=-1), rhs)
         if len(lhs.shape) == 1 and len(rhs.shape) == 2:
             return np.matmul(rhs, g)
         ndim = len(rhs.shape)
@@ -80,7 +80,7 @@ def matmul_vjp(g, x, y, **kwargs):
         if len(lhs.shape) == 2 and len(rhs.shape) == 1:
             return np.matmul(g, lhs)
         if len(lhs.shape) == 1 and len(rhs.shape) == 2:
-            return np.multiply(np.unsqueeze(lhs, axis=-1), g)
+            return np.multiply(np.expand_dims(lhs, axis=-1), g)
         ndim = len(lhs.shape)
         return np.matmul(
             np.transpose(lhs, axes=tuple(range(ndim - 2)) + (ndim - 1, ndim - 2)), g

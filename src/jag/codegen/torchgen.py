@@ -1,6 +1,7 @@
-from jag.graph import Node, TracedArray, ConstantArray
-from jag.utils import topsort, map_nodes
 from typing import Any
+
+from jag.type import GraphNode, _assure_kwargs, _assure_node_with_op
+from jag.utils import map_nodes, topsort
 
 _torch_op_maps = {}
 _simple_ops = {
@@ -22,7 +23,7 @@ _args_kwargs_post_process = {}
 _special_ops = {}
 
 
-def register_value_post_process(name: str, key: str):
+def register_value_process(name: str, key: str):
     def decorator(func):
         _kwargs_value_post_process.setdefault(name, {}).update({key: func})
         return func
@@ -50,7 +51,7 @@ def _get_repr(value: Any, _unexpanded_nodes, _full_name_map) -> Any:
     """
     Get the string representation of a node or a traced array.
     """
-    if isinstance(value, (Node, TracedArray)):
+    if isinstance(value, GraphNode):
         return (
             _unexpanded_nodes[id(value)]
             if id(value) in _unexpanded_nodes
@@ -80,14 +81,20 @@ def _get_value_of_kwarg(
     return value
 
 
-def _get_op_name(node: Node):
+def _get_op_name(node: GraphNode):
+    _assure_node_with_op(node)
     if node.op.name in _torch_op_maps:
         return _torch_op_maps[node.op.name]
     else:
         return f"torch.{node.op.name}"
 
 
-def _get_args_kwargs(node, operands_repr, _unexpanded_nodes, _full_name_map):
+def _get_args_kwargs(
+    node: GraphNode, operands_repr: list, _unexpanded_nodes: dict, _full_name_map: dict
+) -> tuple:
+    _assure_node_with_op(node)
+    _assure_kwargs(node)
+
     if node.op.name in _args_kwargs_post_process:
         _args, _kwargs = _args_kwargs_post_process[node.op.name](
             operands_repr, node.kwargs
@@ -105,7 +112,7 @@ def _get_args_kwargs(node, operands_repr, _unexpanded_nodes, _full_name_map):
 
 
 @register_special_op("at")
-def _process_at(node: Node, operands_repr) -> str:
+def _process_at(node: GraphNode, operands_repr) -> str:
     assert len(node.operands) == 1, f"Expected 1 operand, got {len(node.operands)}."
     idx = node.kwargs["idx"]
     idx_repr = []
@@ -123,7 +130,7 @@ def _process_at(node: Node, operands_repr) -> str:
     return f"{operands_repr[0]}[{', '.join(idx_repr)}]"
 
 
-@register_value_post_process("reshape", "newshape")
+@register_value_process("reshape", "newshape")
 def _reshape_newshape(value):
     if isinstance(value, int):
         return (value,)
@@ -131,7 +138,7 @@ def _reshape_newshape(value):
 
 
 @register_args_kwargs_post_process("where")
-def _condition_args_kwargs(args, kwargs):
+def _where_args_kwargs(args, kwargs):
     assert len(args) in (2, 3), f"Expected 2 or 3 arguments, got {len(args)}."
     if len(args) == 2:
         print(args, kwargs)
@@ -143,7 +150,7 @@ def _condition_args_kwargs(args, kwargs):
 
 
 def torchgen(
-    root: Node,
+    root: GraphNode,
     name_map: dict = None,
     func_name: str = "func",
     max_unexpanded_len: int = 25,
@@ -169,17 +176,14 @@ def torchgen(
     )  # some simple nodes are not expanded, such as ConstantArray(2.0), (x + y), etc.
 
     tabs = " " * 4
-    leaves = [
-        node
-        for node in sorted_nodes
-        if isinstance(node, TracedArray) and not isinstance(node, ConstantArray)
-    ]
+    leaves = root.leaves(include_constant=False)
     signature = f"def {func_name}({', '.join([_full_name_map[id(leaf)] for leaf in leaves])}):\n"
     return_line = f"{tabs}return {_full_name_map[id(root)]}\n"
     output_codes = []
 
     for node in sorted_nodes:
-        if isinstance(node, ConstantArray):
+        assert isinstance(node, GraphNode)
+        if node.is_constant():
             if node.shape == () or node.shape == (1,):
                 _unexpanded_nodes[
                     id(node)
@@ -188,7 +192,9 @@ def torchgen(
                 output_codes.append(
                     f"{_full_name_map[id(node)]} = torch.tensor({node.value})"
                 )
-        elif isinstance(node, Node):
+        elif node.is_leaf():
+            pass
+        else:
             operands_repr = [
                 _get_repr(child, _unexpanded_nodes, _full_name_map)
                 for child in node.operands

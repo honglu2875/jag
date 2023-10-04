@@ -1,9 +1,9 @@
-from typing import List, Set, Optional
+from typing import List, Optional, Set
 
-from jag.graph import Node, Operand, TracedArray
+from jag.type import GraphNode, _assure_kwargs
 
 
-def topsort(node: Node, include_kwargs: bool = False):
+def topsort(node: GraphNode, include_kwargs: bool = False):
     """
     Topological sort the computation graph.
     Args:
@@ -12,21 +12,21 @@ def topsort(node: Node, include_kwargs: bool = False):
     Returns:
         a list of nodes sorted from the leaves to the root.
     """
+    assert isinstance(node, GraphNode), f"{node} is not a GraphNode."
+
     visited = set()
     stack = []
 
-    def _topsort(node: Operand, stack: List[Node], visited: Set):
-        if not isinstance(
-            node, TracedArray
-        ):  # Not a leaf -> carry out recursion on the node
-            assert isinstance(node, Node)
+    def _topsort(node: GraphNode, stack: List[GraphNode], visited: Set):
+        if not node.is_leaf():
             for operand in node.operands:
                 if id(operand) not in visited:
                     visited.add(id(operand))
                     _topsort(operand, stack, visited)
-            if include_kwargs:
+            if include_kwargs and not node.is_leaf():
+                _assure_kwargs(node)
                 for operand in node.kwargs.values():
-                    if isinstance(operand, Node) and id(operand) not in visited:
+                    if isinstance(operand, GraphNode) and id(operand) not in visited:
                         visited.add(id(operand))
                         _topsort(operand, stack, visited)
         stack.append(node)
@@ -51,7 +51,7 @@ def name_generator():
 
 
 def map_nodes(
-    root: Node, incomplete_map: Optional[dict] = None, include_kwargs: bool = True
+    root: GraphNode, incomplete_map: Optional[dict] = None, include_kwargs: bool = True
 ) -> dict:
     """
     Create a mapping from the id of each node to their unique variable names.
@@ -67,7 +67,7 @@ def map_nodes(
     _name_map = {}
     _used_names = set()
 
-    def _map_nodes(node: Node | TracedArray):
+    def _map_nodes(node: GraphNode):
         """
         Priority:
         0. if the node is already in _name_map, skip.
@@ -92,13 +92,14 @@ def map_nodes(
                 _name_map[id(node)] = name
             _used_names.add(_name_map[id(node)])
 
-        if isinstance(node, Node):
-            for operand in node.operands:
-                _map_nodes(operand)
-            if include_kwargs:
-                for operand in node.kwargs.values():
-                    if isinstance(operand, (Node, TracedArray)):
-                        _map_nodes(operand)
+        for operand in node.operands:
+            _map_nodes(operand)
+
+        if include_kwargs and not node.is_leaf():
+            _assure_kwargs(node)
+            for operand in node.kwargs.values():
+                if isinstance(operand, GraphNode):
+                    _map_nodes(operand)
 
     _map_nodes(root)
 

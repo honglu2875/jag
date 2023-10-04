@@ -1,12 +1,14 @@
+import math
 from dataclasses import dataclass
 from functools import singledispatchmethod
 from numbers import Number
-from typing import Any, Optional
+from typing import Any, Callable, Optional, Sequence
 
 import numpy as np
 
+from jag.diff import jvp, vjp
 from jag.ops import Operand, TraceableOp
-from jag.type import ArrayLike
+from jag.type import ArrayLike, GraphNode
 
 
 def get_value(node: "TracedArray") -> str:
@@ -17,47 +19,95 @@ def get_value(node: "TracedArray") -> str:
     )
 
 
-@dataclass
-class Node(Operand):
+@dataclass(kw_only=True)
+class Node(Operand, GraphNode):
     op: Any
-    operands: list
     shape: tuple
     dtype: np.dtype
-    name: Optional[str] = None
     kwargs: Optional[dict] = None
+    # _vjp and _jvp would be created by calling vjp and jvp methods if not assigned
+    _vjp: Optional[Any] = None
+    _jvp: Optional[Any] = None
 
     def __post_init__(self):
         self.kwargs = self.kwargs or {}
 
-    @singledispatchmethod
-    def execute(self, *args):
-        return Node._execute(self, dict(zip([id(l) for l in get_leaves(self)], args)))
-
-    @execute.register
-    def _(self, node_values: dict):
-        return Node._execute(self, node_values)
-
-    @staticmethod
-    def _execute(node: Operand, value_dict: dict):
+    def _execute(self, value_dict: dict):
         """
         Recursively execute the graph from the node, with the given values of the leaves.
         Args:
-            node: the node to execute.
             value_dict: the dictionary of values of the leaves.
         Returns:
             the value of the node.
         """
-        if isinstance(node, ConstantArray):
-            return node.value
-        elif isinstance(node, TracedArray):
-            return value_dict[id(node)]
-        elif isinstance(node, Node):
-            return node.op(
-                *[Node._execute(child, value_dict) for child in node.operands],
-                **node.kwargs,
+        return self.op(
+            *[child.execute(value_dict) for child in self.operands],
+            **self.kwargs,
+        )
+
+    def print_summary(self):
+        """
+        Print a summary of the graph.
+        """
+        print("Leaves:")
+        for leaf in self.leaves(include_constant=False):
+            leaf.print_summary(indent=2)
+        print("Number of vertices:", self.num_nodes)
+
+    def random_leaf_values(self):
+        """
+        Get random concrete values of the leaves.
+        Returns:
+            a list of arrays according to the order of the results of self.leaves()
+        """
+        return [
+            np.random.random(leaf.shape).astype(leaf.dtype)
+            for leaf in self.leaves(include_constant=False)
+        ]
+
+    def call_vjp(self, g: ArrayLike, *args, **kwargs):
+        """
+        Call the vjp function of the graph.
+        """
+        if self._vjp is None:
+            self._vjp = vjp(self)
+        return self._vjp(g, *args, **kwargs)
+
+    def call_jvp(self, *args, **kwargs):
+        """
+        Call the jvp function of the graph.
+        """
+        if self._jvp is None:
+            self._jvp = jvp(self)
+        return self._jvp(*args, **kwargs)
+
+    def grad(self):
+        """
+        Get the graph of its gradient function with respect to non-constant leaves.
+        """
+        return trace(
+            self.call_vjp(np.array(1, dtype=self.dtype)),
+            *self.random_leaf_values(),
+            **self.kwargs,
+        )
+
+    def vjp(self):
+        """
+        Get the graph of its vjp function.
+        """
+        return trace(
+            self.call_vjp(
+                np.random.random(self.shape).astype(self.dtype),
+                *self.random_leaf_values(),
+                **self.kwargs,
             )
-        else:
-            raise ValueError(f"Unsupported node type: {type(node)}.")
+        )
+
+    def jvp(self):
+        """
+        Get the graph of its jvp function.
+        """
+        return trace(self.call_jvp(*self.random_leaf_values(), **self.kwargs))
 
     def to_str(self):
         """
@@ -67,7 +117,7 @@ class Node(Operand):
         def _to_str(node: Operand, depth: int):
             spaces = " " * (depth * 2)
             if isinstance(node, TracedArray):
-                return f"{spaces}{node.name} = {get_value(node)}"
+                return f"{spaces}{node.name or '<unnamed>'} = {get_value(node)}"
             elif isinstance(node, Node):
                 if isinstance(node.op, TraceableOp):
                     op_name = node.op.name
@@ -89,17 +139,45 @@ class Node(Operand):
 
         return _to_str(self, 0)
 
+    @property
+    def size(self) -> int:
+        return math.prod(self.shape)
 
-@dataclass
-class TracedArray(Operand):
+    @property
+    def num_nodes(self) -> int:
+        count = 0
+        for node in self.operands + list(self.kwargs.values()):
+            if isinstance(node, Node):
+                count += node.num_nodes
+            elif isinstance(node, TracedArray):
+                count += 1
+        return count
+
+
+@dataclass(kw_only=True)
+class TracedArray(Operand, GraphNode):
     shape: tuple
     dtype: np.dtype
     value: Optional[ArrayLike] = None
-    name: Optional[str] = None
+    _requires_grad: bool = True
+
+    def print_summary(self, indent: int = 0):
+        print(f"{' ' * indent}{self.name or '<unspecified>'}:")
+        print(f"{' ' * indent}  shape: {self.shape}")
+        print(f"{' ' * indent}  dtype: {self.dtype}")
+        if self.value is not None:
+            print(f"{' ' * indent}  value: {self.value}")
 
     @property
     def requires_grad(self):
-        return True
+        return self._requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value):
+        self._requires_grad = value
+
+    def _execute(self, value_dict: dict):
+        return value_dict.get(id(self), self.value)
 
     @singledispatchmethod
     def to_const(self):
@@ -112,6 +190,7 @@ class TracedArray(Operand):
         return ConstantArray(value)
 
 
+@dataclass(kw_only=True)
 class ConstantArray(TracedArray):
     def __init__(self, value: ArrayLike):
         super().__init__(
@@ -125,10 +204,19 @@ class ConstantArray(TracedArray):
         return False
 
     def to_abstract(self):
-        return TracedArray(shape=self.shape, dtype=self.dtype, value=self.value)
+        return TracedArray(
+            name=self.name, shape=self.shape, dtype=self.dtype, value=self.value
+        )
+
+    def _execute(self, value_dict: dict):
+        return self.value
+
+    @requires_grad.setter
+    def requires_grad(self, value):
+        raise ValueError("Cannot set requires_grad for a constant node.")
 
 
-def to_traceable(arg: Any) -> Operand:
+def to_traceable(arg: Any) -> Node | TracedArray:
     """
     Convert the argument into a part of the computation graph for tracing:
     1. if arg is a subclass of Operand, it is a part of the graph and is already traceable.
@@ -142,24 +230,15 @@ def to_traceable(arg: Any) -> Operand:
         raise RuntimeError(f"Unsupported argument type: {type(arg)}.")
 
 
-def get_leaves(node: Node, include_constant=False, unique=True) -> list[TracedArray]:
+def trace(func: Callable, *args, constants: Optional[Sequence] = None, **kwargs):
     """
-    Get the leaves of the graph.
+    Utility function to trace the computation graph of a function.
     """
-    leaves = []
-    used_leaf = set()
-
-    def _get_leaves(node: Node):
-        if not include_constant and isinstance(node, ConstantArray):
-            return
-        if isinstance(node, TracedArray):
-            if not unique or id(node) not in used_leaf:
-                used_leaf.add(id(node))
-                leaves.append(node)
-        else:
-            for operand in node.operands:
-                _get_leaves(operand)
-
-    _get_leaves(node)
-
-    return leaves
+    constants = constants or []
+    args = [
+        TracedArray(shape=np.array(arg).shape, dtype=np.array(arg).dtype)
+        if i not in constants
+        else ConstantArray(np.array(arg))
+        for i, arg in enumerate(args)
+    ]
+    return func(*args, **kwargs)
