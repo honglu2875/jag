@@ -21,6 +21,25 @@ def _assert_non_traceable(kwargs, cls):
     )
 
 
+def _is_all_zero(x) -> bool:
+    """
+    Decide whether x is
+        1. a constant zero integer
+        2. or a numpy array with all zeros
+        2. or a ConstantArray with an all-zero numpy array as value
+    """
+    if isinstance(x, int):
+        return x == 0
+    if isinstance(x, np.ndarray):
+        return np.all(x == 0)
+    elif isinstance(x, GraphNode):
+        return (
+            x.is_constant() and isinstance(x.value, np.ndarray) and np.all(x.value == 0)
+        )
+    else:
+        return False
+
+
 @dataclass
 class TraceableOp:
     """
@@ -97,6 +116,26 @@ class TraceableOp:
             trace = True
 
         if trace:
+            # Pruning: if any of the operands is all-zero during mul or matmul, the result is all-zero.
+            if self.name == "multiply" or self.name == "matmul":
+                if any(_is_all_zero(a) for a in args):
+                    return self.leaf_cls(
+                        value=np.zeros(
+                            shape=self.shape_fn(*[arg.shape for arg in args], **kwargs),
+                            dtype=self.out_dtype
+                            or self._get_implied_dtype(args, **kwargs),
+                        )
+                    ).to_const()
+            # Pruning: if any of the operands is all-zero during add or subtract, the result is the other operand.
+            elif self.name == "add":
+                if any(_is_all_zero(a) for a in args):
+                    return args[0] if _is_all_zero(args[1]) else args[1]
+            elif self.name == "subtract":
+                if _is_all_zero(args[1]):
+                    return args[0]
+                elif _is_all_zero(args[0]):
+                    return -args[1]
+
             traceable_args = [self.to_traceable(arg) for arg in args]
             dummy_kwargs = self._convert_kwargs_to_nontraceable(kwargs)
             return self.node_cls(
@@ -121,7 +160,7 @@ class TraceableOp:
     def _get_implied_dtype(self, args, **kwargs) -> np.dtype:
         _assert_non_traceable(kwargs, GraphNode)
         dummies = [np.ones(arg.shape, dtype=arg.dtype) for arg in args]
-        return self.op(*dummies, **kwargs).dtype
+        return np.array(self.op(*dummies, **kwargs)).dtype
 
     @staticmethod
     def _convert_kwargs_to_nontraceable(kwargs):

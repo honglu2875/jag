@@ -64,8 +64,15 @@ def map_nodes(
     """
     name_gen = name_generator()
     incomplete_map = incomplete_map or {}
+    _named_nodes = [
+        node for node in topsort(root, include_kwargs) if node.name is not None
+    ]
     _name_map = {}
     _used_names = set()
+    for node in _named_nodes:
+        if node.name not in _used_names:
+            _name_map[id(node)] = node.name
+            _used_names.add(node.name)
 
     def _map_nodes(node: GraphNode):
         """
@@ -78,16 +85,14 @@ def map_nodes(
         Jump to the next whenever there is a name conflict.
         """
         if id(node) not in _name_map:
-            if node.name is not None and node.name not in _used_names:
-                _name_map[id(node)] = node.name
-            elif (
+            if (
                 id(node) in incomplete_map
                 and incomplete_map[id(node)] not in _used_names
             ):
                 _name_map[id(node)] = incomplete_map[id(node)]
             else:
                 name = next(name_gen)
-                while name in _name_map:
+                while name in _used_names:
                     name = next(name_gen)
                 _name_map[id(node)] = name
             _used_names.add(_name_map[id(node)])

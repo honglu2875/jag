@@ -1,3 +1,4 @@
+import inspect
 import math
 from dataclasses import dataclass
 from functools import singledispatchmethod
@@ -81,33 +82,55 @@ class Node(Operand, GraphNode):
             self._jvp = jvp(self)
         return self._jvp(*args, **kwargs)
 
+    def call_grad(self, *args, **kwargs):
+        return self.call_vjp(np.array(1, dtype=self.dtype), *args, **kwargs)
+
     def grad(self):
         """
         Get the graph of its gradient function with respect to non-constant leaves.
+        Since for the `grad` function, the return is a tuple by default, the return
+          as graphs will respect the tuple structure and become (Node, Node, ...)
         """
         return trace(
-            self.call_vjp(np.array(1, dtype=self.dtype)),
-            *self.random_leaf_values(),
+            self.call_vjp,
+            *(
+                [ConstantArray(np.array(1, dtype=self.dtype))]
+                + list(self.leaves(include_constant=False))
+            ),
             **self.kwargs,
         )
 
     def vjp(self):
         """
-        Get the graph of its vjp function.
+        Get the graphs of its vjp function.
+        Since for the `vjp` function, the return is a tuple by default, the return
+          as graphs will respect the tuple structure and become (Node, Node, ...)
         """
         return trace(
-            self.call_vjp(
-                np.random.random(self.shape).astype(self.dtype),
-                *self.random_leaf_values(),
-                **self.kwargs,
-            )
+            self.call_vjp,
+            *(
+                [np.random.random(self.shape).astype(self.dtype)]
+                + list(self.leaves(include_constant=False))
+            ),
+            **self.kwargs,
         )
 
     def jvp(self):
         """
-        Get the graph of its jvp function.
+        Get the graphs of its jvp function.
+        Since for the `jvp` function, the return is a tuple by default, the return
+          as graphs will respect the tuple structure and become (Node, Node, ...)
         """
-        return trace(self.call_jvp(*self.random_leaf_values(), **self.kwargs))
+        leaves = list(self.leaves(include_constant=False))
+        tangents = [
+            TracedArray(
+                shape=leaf.shape,
+                dtype=leaf.dtype,
+                name="d" if leaf.name is None else "d" + leaf.name,
+            )
+            for leaf in leaves
+        ]
+        return trace(self.call_jvp, *(leaves + tangents), **self.kwargs)
 
     def to_str(self):
         """
@@ -125,7 +148,7 @@ class Node(Operand, GraphNode):
                     op_name = node.op.__name__
                 delimiter = ",\n"
                 kwarg_str = (
-                    [", ".join([f"{spaces}  {k}={v}" for k, v in node.kwargs.items()])]
+                    [",\n".join([f"{spaces}  {k}={v}" for k, v in node.kwargs.items()])]
                     if node.kwargs
                     else []
                 )
@@ -142,6 +165,10 @@ class Node(Operand, GraphNode):
     @property
     def size(self) -> int:
         return math.prod(self.shape)
+
+    @property
+    def ndim(self) -> int:
+        return len(self.shape)
 
     @property
     def num_nodes(self) -> int:
@@ -161,6 +188,15 @@ class TracedArray(Operand, GraphNode):
     value: Optional[ArrayLike] = None
     _requires_grad: bool = True
 
+    @classmethod
+    def from_obj(cls, obj: Any, name=None):
+        if isinstance(obj, cls):
+            return obj
+        elif isinstance(obj, (Number, np.ndarray)):
+            return cls(shape=np.array(obj).shape, dtype=np.array(obj).dtype, name=name)
+        else:
+            raise ValueError(f"Unsupported object type: {type(obj)}.")
+
     def print_summary(self, indent: int = 0):
         print(f"{' ' * indent}{self.name or '<unspecified>'}:")
         print(f"{' ' * indent}  shape: {self.shape}")
@@ -179,15 +215,10 @@ class TracedArray(Operand, GraphNode):
     def _execute(self, value_dict: dict):
         return value_dict.get(id(self), self.value)
 
-    @singledispatchmethod
     def to_const(self):
         if self.value is None:
             raise ValueError(f"To convert to a constant leaf, a 'value' must be given.")
         return ConstantArray(self.value)
-
-    @to_const.register
-    def _(self, value: ArrayLike):
-        return ConstantArray(value)
 
 
 @dataclass(kw_only=True)
@@ -233,12 +264,25 @@ def to_traceable(arg: Any) -> Node | TracedArray:
 def trace(func: Callable, *args, constants: Optional[Sequence] = None, **kwargs):
     """
     Utility function to trace the computation graph of a function.
+    Args:
+        func: the function to be traced.
+        *args: the arguments of the function.
+        constants: the indices of the arguments that are constants.
+        **kwargs: the keyword arguments of the function.
+    Returns:
+        the root node of the computation graph.
     """
+    sig = inspect.signature(func)
     constants = constants or []
     args = [
-        TracedArray(shape=np.array(arg).shape, dtype=np.array(arg).dtype)
-        if i not in constants
-        else ConstantArray(np.array(arg))
+        TracedArray.from_obj(arg)
+        if i not in constants and not isinstance(arg, ConstantArray)
+        else to_traceable(arg)
         for i, arg in enumerate(args)
     ]
-    return func(*args, **kwargs)
+    bound_args = sig.bind(*args, **kwargs)
+    for k, v in bound_args.arguments.items():
+        if isinstance(v, GraphNode):
+            v.name = k
+
+    return func(*bound_args.args, **bound_args.kwargs)

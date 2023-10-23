@@ -167,7 +167,7 @@ def jvp(root: GraphNode, include_value=True):
     def jvp_func(*args, **kwargs):
         if not args:
             raise ValueError("No leaf values are provided.")
-        elif len(args) == 2:
+        elif len(args) == 2 and isinstance(args[0], (tuple, dict)):
             if isinstance(args[0], tuple) and isinstance(args[1], tuple):
                 node_values = {id(l): val for l, val in zip(leaves, args[0])}
                 tangent_values = {id(l): val for l, val in zip(leaves, args[1])}
@@ -181,9 +181,9 @@ def jvp(root: GraphNode, include_value=True):
             else:
                 raise ValueError(
                     "When there are two non-array positional arguments, the function accepts\n"
-                    "1. tangent: tuple, primal: tuple, where the order of tuple corresponds to "
+                    "1. primal: tuple, tangent: tuple, where the order of tuple corresponds to "
                     "the flattened order of leaves (when calling jag.graph.get_leaves).\n"
-                    "2. tangent: dict, primal: dict, where the dicts map the names of the leaves "
+                    "2. primal: dict, tangent: dict, where the dicts map the names of the leaves "
                     "to the corresponding values."
                 )
         else:
