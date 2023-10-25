@@ -66,6 +66,17 @@ def _get_op_name(node: GraphNode):
 def _get_args_kwargs(
     node: GraphNode, operands_repr: list, _unexpanded_nodes: dict, _full_name_map: dict
 ) -> tuple:
+    """
+    Get the args and kwargs of an op in the form of codes (either the variable names or an
+    unexpanded expression).
+    Args:
+        node: the node
+        operands_repr: the previously collected list of operands in the form of codes
+        _unexpanded_nodes: the dict mapping node id to the unexpanded expression.
+        _full_name_map: the generated dict maps the node id to its variable name.
+    Returns:
+        tuple of (args, kwargs) containing the code string of each variable
+    """
     _assure_node_with_op(node)
     _assure_kwargs(node)
 
@@ -86,6 +97,7 @@ def _get_args_kwargs(
 
 
 def _get_signature_arg_list(arg_list: list, leaf_names_list: list) -> list:
+    """Helper function of getting a combined list of function arguments"""
     leaf_names = set(leaf_names_list)
     arg_list = [arg for arg in arg_list if arg in leaf_names]
     arg_set = set(arg_list)
